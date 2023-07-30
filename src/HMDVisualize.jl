@@ -15,7 +15,7 @@ using PeriodicTable
 using Printf
 using Symbolics
 
-export visualize, color_scheme, default_color, atom_color
+export visualize, color_scheme, viridis, default_color, atom_color
 
 ###
 ###### preset colors
@@ -176,9 +176,11 @@ function line_bewteen!(axis, p1, p2)
     return nothing
 end
 
-function color_scheme(value::AbstractFloat; scheme=:viridis)
+function color_scheme(value::Real; scheme=:viridis)
     return HSLA{Float32}(get(colorschemes[scheme], value))
 end
+
+viridis(value::Real) = color_scheme(value::Real; scheme=:viridis)
 
 function update_reader!(reader, traj, index)
     import_dynamic!(reader, traj, index)

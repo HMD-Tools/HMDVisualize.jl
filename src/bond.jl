@@ -119,7 +119,7 @@ function bond_nonpbc(s::AbstractSystem, color_func::Function)
     return bonds
 end
 
-function bond_pbc(s::AbstractSystem, color_func::Function)
+function bond_pbc(s::AbstractSystem{3, F, SysType}, color_func::Function) where {F<:AbstractFloat, SysType<:AbstractSystemType}
     if !wrapped(s)
         error("bond_pbc does not support non-wrapped system. Use bond_nonpbc instead.")
     end
@@ -153,20 +153,19 @@ function bond_pbc(s::AbstractSystem, color_func::Function)
         n = 2
         if diff[1] != 0
             # x軸方向の周期境界とbondが交差
-            α = diff[1]
-            typeof(_cross_point_x) |> println
+            α = diff[1] == 1 ? 1 : 0
             _t = _cross_point_x(α, p1, bond_vector, a, b, c, origin)
             cross_points[n] = (progress=_t, cross_dim=1)
             n += 1
         end
         if diff[2] != 0
-            β = diff[2]
+            β = diff[2] == 1 ? 1 : 0
             _t = _cross_point_y(β, p1, bond_vector, a, b, c, origin)
             cross_points = (progress=_t, cross_dim=2)
             n += 1
         end
         if diff[3] != 0
-            γ = diff[3]
+            γ = diff[3] == 1 ? 1 : 0
             _t = _cross_point_z(γ, p1, bond_vector, a, b, c, origin)
             cross_points = (progress=_t, cross_dim=3)
             n += 1
@@ -174,12 +173,10 @@ function bond_pbc(s::AbstractSystem, color_func::Function)
         sort!(cross_points; by=x->x.progress)
         @assert all(x -> -1 <= x.progress <= 1, cross_points)
 
-        println(cross_points)
-
         # 結合次数別にbonds::Vector{BondData}を構築し，bond dataを追加
         color1, color2 = color_func(s, atom_id1), color_func(s, atom_id2)
         bond_type = _bond_type(s, atom_id1, atom_id2)
-        pbc_shift = zeros(3)
+        pbc_shift = SVector{3, F}(0.0, 0.0, 0.0)
         for i in 1:length(cross_points)-1
             t, t_next = cross_points[i].progress, cross_points[i+1].progress
             cl = t < 0.5 ? color1 : color2
@@ -215,25 +212,25 @@ const _cross_point_x, _cross_point_y, _cross_point_z = begin
     # if bond crosses yz pbc plane, α == {1|-1}, solve for t, β, γ
     result = Symbolics.solve_for([eq₁, eq₂, eq₃], [t, β, γ]; simplify=true)
     fx = build_function(
-        result[1], 
-        #α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃]; 
-        α, (p₁, p₂, p₃), (v₁, v₂, v₃), (a₁, a₂, a₃), (b₁, b₂, b₃), (c₁, c₂, c₃), (o₁, o₂, o₃); 
+        result[1],
+        #α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃];
+        α, (p₁, p₂, p₃), (v₁, v₂, v₃), (a₁, a₂, a₃), (b₁, b₂, b₃), (c₁, c₂, c₃), (o₁, o₂, o₃);
         expression=Val{true}
     )
 
     # if bond crosses xz pbc plane, β == {1|-1}, solve for t, α, γ
     result = Symbolics.solve_for([eq₁, eq₂, eq₃], [t, α, γ]; simplify=true)
     fy = build_function(
-        result[1], 
-        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃]; 
+        result[1],
+        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃];
         expression=Val{true}
     )
 
     # if bond crosses xy pbc plane, γ == {1|-1}, solve for t, α, β
     result = Symbolics.solve_for([eq₁, eq₂, eq₃], [t, α, β]; simplify=true)
     fz = build_function(
-        result[1], 
-        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃],[o₁, o₂, o₃]; 
+        result[1],
+        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃],[o₁, o₂, o₃];
         expression=Val{true}
     )
 
