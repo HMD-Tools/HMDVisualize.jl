@@ -57,6 +57,7 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
         bond_radius = bond_radius
     )
 end
+precompile(visualize, (System{3, Float64, Polymeric},))
 
 #TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
 function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
@@ -136,6 +137,7 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
 
     return fig
 end
+precompile(visualize, (Trajectory{3, Float64, Polymeric},))
 
 function get_boxmesh(s)
     a, b, c = box(s).axis[:,1], box(s).axis[:,2], box(s).axis[:,3]
