@@ -1,2 +1,3 @@
 /docs/build/
 *.code-workspace
+Manifest.toml

@@ -57,10 +57,57 @@ function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=defaul
         bond_radius = bond_radius
     )
 end
-precompile(visualize, (System{3, Float64, Polymeric},))
+
+# traits for BS system
+struct NonBeadsSpring <: AbstractSystemType end
+_is_BS(traj::Trajectory{D, F, BeadsSpring, L}) where {D, F, L} = BeadsSpring()
+_is_BS(traj::Trajectory{D, F, <:AbstractSystemType, L}) where {D, F, L} = NonBeadsSpring()
+
+function visualize(
+    traj::AbstractTrajectory;
+    atom_radius::Number = 0.30,
+    bond_radius::Number = 0.15,
+    color_func::Function = default_color
+)
+    return visualize(_is_BS(traj), traj; atom_radius=atom_radius, bond_radius=bond_radius)
+end
+
+# needs holy trait
+function visualize(
+    ::BeadsSpring,
+    traj::Trajectory{D, F, BeadsSpring, L};
+    atom_radius::Number = 0.30,
+    bond_radius::Number = 0.15,
+    color_func::Function=default_color
+) where {D, F<:AbstractFloat, L}
+    nelem = length(unique(all_elements(traj[1])))
+    cf = if color_func == default_color
+        (s, i) -> viridis(element(s, i) / nelem)
+    else
+        color_func
+    end
+
+    return _visualize(traj; atom_radius=atom_radius, bond_radius=bond_radius, color_func=cf)
+end
+
+function visualize(
+    ::NonBeadsSpring,
+    traj::Trajectory{D, F, SysType, L};
+    atom_radius::Number = 0.30,
+    bond_radius::Number = 0.15,
+    color_func::Function=default_color
+) where {D, F<:AbstractFloat, SysType<:AbstractSystemType, L}
+    nelem = length(unique(all_elements(traj[1])))
+    return _visualize(
+        traj;
+        atom_radius = atom_radius,
+        bond_radius = bond_radius,
+        color_func = color_func
+    )
+end
 
 #TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
-function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function _visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
@@ -137,7 +184,6 @@ function visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function
 
     return fig
 end
-precompile(visualize, (Trajectory{3, Float64, Polymeric},))
 
 function get_boxmesh(s)
     a, b, c = box(s).axis[:,1], box(s).axis[:,2], box(s).axis[:,3]
