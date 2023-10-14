@@ -161,13 +161,13 @@ function bond_pbc(s::AbstractSystem{3, F, SysType}, color_func::Function) where 
         if diff[2] != 0
             β = diff[2] == 1 ? 1 : 0
             _t = _cross_point_y(β, p1, bond_vector, a, b, c, origin)
-            cross_points = (progress=_t, cross_dim=2)
+            cross_points[n] = (progress=_t, cross_dim=2)
             n += 1
         end
         if diff[3] != 0
             γ = diff[3] == 1 ? 1 : 0
             _t = _cross_point_z(γ, p1, bond_vector, a, b, c, origin)
-            cross_points = (progress=_t, cross_dim=3)
+            cross_points[n] = (progress=_t, cross_dim=3)
             n += 1
         end
         sort!(cross_points; by=x->x.progress)
@@ -204,9 +204,9 @@ const _cross_point_x, _cross_point_y, _cross_point_z = begin
     @variables t # progress along bond
 
     # p + t*v  ~ α*a + β*b + γ*c かつ {α|β|γ} == {1|-1}のときbondが周期境界と交差
-    eq₁ = p₁ + t*v₁  ~ α*a₁ + β*b₁ + γ*c₁ + o₁
-    eq₂ = p₂ + t*v₂  ~ α*a₂ + β*b₂ + γ*c₂ + o₂
-    eq₃ = p₃ + t*v₃  ~ α*a₃ + β*b₃ + γ*c₃ + o₃
+    eq₁ = p₁ + t*v₁ ~ α*a₁ + β*b₁ + γ*c₁ + o₁
+    eq₂ = p₂ + t*v₂ ~ α*a₂ + β*b₂ + γ*c₂ + o₂
+    eq₃ = p₃ + t*v₃ ~ α*a₃ + β*b₃ + γ*c₃ + o₃
 
     # p, v, a, b, c is given in all cases below
     # if bond crosses yz pbc plane, α == {1|-1}, solve for t, β, γ
@@ -222,7 +222,7 @@ const _cross_point_x, _cross_point_y, _cross_point_z = begin
     result = Symbolics.solve_for([eq₁, eq₂, eq₃], [t, α, γ]; simplify=true)
     fy = build_function(
         result[1],
-        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃];
+        β, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃], [o₁, o₂, o₃];
         expression=Val{true}
     )
 
@@ -230,7 +230,7 @@ const _cross_point_x, _cross_point_y, _cross_point_z = begin
     result = Symbolics.solve_for([eq₁, eq₂, eq₃], [t, α, β]; simplify=true)
     fz = build_function(
         result[1],
-        α, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃],[o₁, o₂, o₃];
+        γ, [p₁, p₂, p₃], [v₁, v₂, v₃], [a₁, a₂, a₃], [b₁, b₂, b₃], [c₁, c₂, c₃],[o₁, o₂, o₃];
         expression=Val{true}
     )
 

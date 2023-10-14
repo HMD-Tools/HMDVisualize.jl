@@ -16,6 +16,7 @@ LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
 PeriodicTable = "7b2266bf-644c-5ea3-82d8-af4bbd25a884"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]

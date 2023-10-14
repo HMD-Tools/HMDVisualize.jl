@@ -13,6 +13,7 @@ using MLStyle
 using GLMakie #cite
 using PeriodicTable
 using Printf
+using StaticArrays
 using Symbolics
 
 export visualize, color_scheme, viridis, default_color, atom_color
