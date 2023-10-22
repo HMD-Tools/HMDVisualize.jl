@@ -50,9 +50,18 @@ include("bond.jl")
 ###### system visualization functions
 ###
 
-function visualize(s::AbstractSystem{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function visualize(
+    s::AbstractSystem{D, F, SysType},
+    fig = Figure(; backgroundcolor = :black),
+    time_obs = nothing;
+    color_func::Function = default_color,
+    atom_radius::Number = 0.30,
+    bond_radius::Number = 0.15
+) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     return visualize(
-        Trajectory(s);
+        Trajectory(s),
+        fig,
+        time_obs;
         color_func = color_func,
         atom_radius = atom_radius,
         bond_radius = bond_radius
@@ -65,21 +74,25 @@ _is_BS(traj::Trajectory{D, F, BeadsSpring, L}) where {D, F, L} = BeadsSpring()
 _is_BS(traj::Trajectory{D, F, <:AbstractSystemType, L}) where {D, F, L} = NonBeadsSpring()
 
 function visualize(
-    traj::AbstractTrajectory;
+    traj::AbstractTrajectory,
+    fig = Figure(; backgroundcolor = :black),
+    time_obs = nothing;
     atom_radius::Number = 0.30,
     bond_radius::Number = 0.15,
     color_func::Function = default_color
 )
-    return visualize(_is_BS(traj), traj; atom_radius=atom_radius, bond_radius=bond_radius)
+    return visualize(_is_BS(traj), traj, fig, time_obs; atom_radius=atom_radius, bond_radius=bond_radius)
 end
 
 # needs holy trait
 function visualize(
     ::BeadsSpring,
-    traj::Trajectory{D, F, BeadsSpring, L};
+    traj::Trajectory{D, F, BeadsSpring, L},
+    fig,
+    time_obs;
     atom_radius::Number = 0.30,
     bond_radius::Number = 0.15,
-    color_func::Function=default_color
+    color_func::Function = default_color
 ) where {D, F<:AbstractFloat, L}
     nelem = length(unique(all_elements(traj[1])))
     cf = if color_func == default_color
@@ -88,19 +101,23 @@ function visualize(
         color_func
     end
 
-    return _visualize(traj; atom_radius=atom_radius, bond_radius=bond_radius, color_func=cf)
+    return _visualize(traj, fig, time_obs; atom_radius=atom_radius, bond_radius=bond_radius, color_func=cf)
 end
 
 function visualize(
     ::NonBeadsSpring,
-    traj::Trajectory{D, F, SysType, L};
+    traj::Trajectory{D, F, SysType, L},
+    fig,
+    time_obs;
     atom_radius::Number = 0.30,
     bond_radius::Number = 0.15,
-    color_func::Function=default_color
+    color_func::Function = default_color
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType, L}
     nelem = length(unique(all_elements(traj[1])))
     return _visualize(
-        traj;
+        traj,
+        fig,
+        time_obs;
         atom_radius = atom_radius,
         bond_radius = bond_radius,
         color_func = color_func
@@ -108,33 +125,32 @@ function visualize(
 end
 
 #TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
-function _visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Function=default_color, atom_radius::Number=0.30, bond_radius::Number=0.15) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+function _visualize(
+    traj::AbstractTrajectory{D, F, SysType},
+    fig,
+    time_obs;
+    color_func::Function = default_color,
+    atom_radius::Number = 0.30,
+    bond_radius::Number = 0.15
+) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
     end
     wrap_coord = wrapped(traj)
 
-    # enumerate all possible colors
-    #colors = Vector{HSLA{Float32}}(undef, 0)
-    #for reader in traj
-    #    snapshot = reader.reader
-    #    for atom_id in 1:natom(snapshot)
-    #        color = color_func(snapshot, atom_id)
-    #        if color ∉ colors
-    #            push!(colors, color)
-    #        end
-    #    end
-    #end
-
-    fig = Figure(; backgroundcolor = :black)
-    sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
+    #fig = Figure(; backgroundcolor = :black)
+    #sl_x = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1)
+    if isnothing(time_obs)
+        time_obs = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1).value
+    end
     axis = LScene(fig[1,1]; show_axis = false)
     cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0)
 
     reader = similar_system(traj)
 
     # box plot
-    box_mesh = lift(sl_x.value) do index
+    #box_mesh = lift(sl_x.value) do index
+    box_mesh = lift(time_obs) do index
         update_reader!(reader, traj, index)
         get_boxmesh(reader)
     end
@@ -145,7 +161,7 @@ function _visualize(traj::AbstractTrajectory{D, F, SysType}; color_func::Functio
         Point3f.(all_positions(reader))
     end
     atom_colors = lift(box_mesh) do stub
-        [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
+        colors = [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
     end
     inspect_labels = map(1:natom(reader)) do i
         p = position(reader, i)
