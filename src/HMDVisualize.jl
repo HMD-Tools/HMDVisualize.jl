@@ -81,7 +81,15 @@ function visualize(
     bond_radius::Number = 0.15,
     color_func::Function = default_color
 )
-    return visualize(_is_BS(traj), traj, fig, time_obs; atom_radius=atom_radius, bond_radius=bond_radius)
+    return visualize(
+        _is_BS(traj),
+        traj,
+        fig,
+        time_obs;
+        color_func = color_func,
+        atom_radius = atom_radius,
+        bond_radius = bond_radius
+    )
 end
 
 # needs holy trait
