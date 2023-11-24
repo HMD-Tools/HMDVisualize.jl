@@ -58,7 +58,8 @@ function bondscatter!(axis::LScene, bonds::BondData, bond_radius::Number, marker
     meshscatter!(
         axis, bonds.origin;
         color = bonds.colors, marker = marker,
-        rotation = rots, markersize = scales
+        rotation = rots, markersize = scales,
+        inspectable = false
     )
 end
 
@@ -87,7 +88,8 @@ function bondscatter!(axis::LScene, bonds::Observable{BondData}, bond_radius::Nu
     meshscatter!(
         axis, points;
         color = colors, marker = marker,
-        rotation = rots, markersize = scales
+        rotation = rots, markersize = scales,
+        inspectable = false
     )
 end
 

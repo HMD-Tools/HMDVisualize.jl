@@ -56,7 +56,8 @@ function visualize(
     time_obs = nothing;
     color_func::Function = default_color,
     atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15
+    bond_radius::Number = 0.15,
+    boxvisualize::Bool = true
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     return visualize(
         Trajectory(s),
@@ -64,7 +65,8 @@ function visualize(
         time_obs;
         color_func = color_func,
         atom_radius = atom_radius,
-        bond_radius = bond_radius
+        bond_radius = bond_radius,
+        boxvisualize = boxvisualize
     )
 end
 
@@ -79,16 +81,18 @@ function visualize(
     time_obs = nothing;
     atom_radius::Number = 0.30,
     bond_radius::Number = 0.15,
+    boxvisualize::Bool = true,
     color_func::Function = default_color
 )
     return visualize(
         _is_BS(traj),
         traj,
         fig,
-        time_obs;
-        color_func = color_func,
-        atom_radius = atom_radius,
-        bond_radius = bond_radius
+        time_obs,
+        atom_radius,
+        bond_radius,
+        boxvisualize,
+        color_func
     )
 end
 
@@ -97,10 +101,11 @@ function visualize(
     ::BeadsSpring,
     traj::Trajectory{D, F, BeadsSpring, L},
     fig,
-    time_obs;
-    atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15,
-    color_func::Function = default_color
+    time_obs,
+    atom_radius::Number,
+    bond_radius::Number,
+    boxvisualize::Bool,
+    color_func::Function
 ) where {D, F<:AbstractFloat, L}
     nelem = length(unique(all_elements(traj[1])))
     cf = if color_func == default_color
@@ -109,26 +114,28 @@ function visualize(
         color_func
     end
 
-    return _visualize(traj, fig, time_obs; atom_radius=atom_radius, bond_radius=bond_radius, color_func=cf)
+    return _visualize(traj, fig, time_obs, atom_radius, bond_radius, boxvisualize, cf)
 end
 
 function visualize(
     ::NonBeadsSpring,
     traj::Trajectory{D, F, SysType, L},
     fig,
-    time_obs;
-    atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15,
-    color_func::Function = default_color
+    time_obs,
+    atom_radius::Number,
+    bond_radius::Number,
+    boxvisualize::Bool,
+    color_func::Function
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType, L}
     nelem = length(unique(all_elements(traj[1])))
     return _visualize(
         traj,
         fig,
-        time_obs;
-        atom_radius = atom_radius,
-        bond_radius = bond_radius,
-        color_func = color_func
+        time_obs,
+        atom_radius,
+        bond_radius,
+        boxvisualize,
+        color_func
     )
 end
 
@@ -136,10 +143,11 @@ end
 function _visualize(
     traj::AbstractTrajectory{D, F, SysType},
     fig,
-    time_obs;
-    color_func::Function = default_color,
-    atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15
+    time_obs,
+    atom_radius::Number,
+    bond_radius::Number,
+    boxvisualize::Bool,
+    color_func::Function
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
@@ -162,7 +170,10 @@ function _visualize(
         update_reader!(reader, traj, index)
         get_boxmesh(reader)
     end
-    mesh!(axis, box_mesh; color = :white)
+    mesh!(
+        axis, box_mesh;
+        color = boxvisualize ? :white : :transparent
+    )
 
     # atom plot
     atoms = lift(box_mesh) do stub
