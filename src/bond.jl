@@ -37,7 +37,12 @@ Base.@kwdef mutable struct BondData
     colors::Vector{HSLA{Float32}} = HSLA{Float32}[]
 end
 
-function add_bdata!(b::BondData, origin::AbstractVector{F}, direction::AbstractVector{F}, color::HSLA{Float32}) where {F<:AbstractFloat}
+function add_bdata!(
+    b::BondData,
+    origin::AbstractVector{F},
+    direction::AbstractVector{F},
+    color::Colorant
+) where {F<:AbstractFloat}
     push!(b.origin, origin)
     push!(b.direction, direction)
     push!(b.colors, color)
