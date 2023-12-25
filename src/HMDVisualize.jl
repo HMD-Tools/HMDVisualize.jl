@@ -194,7 +194,7 @@ function _visualize(
         time_obs = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1).value
     end
     axis = LScene(fig[1,1]; show_axis = false)
-    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0, cad=true)
+    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0, cad=false)
 
     reader = similar_system(traj)
 
