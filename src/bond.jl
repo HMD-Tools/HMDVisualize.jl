@@ -34,15 +34,15 @@ end
 Base.@kwdef mutable struct BondData
     origin::Vector{Point3f0} = Point3f[]
     direction::Vector{Point3f0} = Point3f[]
-    colors::Vector{HSLA{Float32}} = HSLA{Float32}[]
+    colors::Vector{LCHuv{Float32}} = LCHuv{Float32}[]
 end
 
 function add_bdata!(
     b::BondData,
-    origin::AbstractVector{F},
-    direction::AbstractVector{F},
+    origin::AbstractVector{F1},
+    direction::AbstractVector{F2},
     color::Colorant
-) where {F<:AbstractFloat}
+) where {F1<:AbstractFloat, F2<:AbstractFloat}
     push!(b.origin, origin)
     push!(b.direction, direction)
     push!(b.colors, color)
@@ -98,7 +98,10 @@ function bondscatter!(axis::LScene, bonds::Observable{BondData}, bond_radius::Nu
     )
 end
 
-function bond_nonpbc(s::AbstractSystem, color_func::Function)
+function bond_nonpbc(
+    s::AbstractSystem{D, F, S},
+    colors::AbstractVector{T}
+) where {D, F<:AbstractFloat, S<:AbstractSystemType, T<:Colorant}
     if wrapped(s)
         error("bond_nonpbc does not support wrapped system. Use bond_pbc instead.")
     end
@@ -115,18 +118,21 @@ function bond_nonpbc(s::AbstractSystem, color_func::Function)
         bond_type = _bond_type(s, atom_id1, atom_id2)
         add_bdata!(
             bonds[bond_type],
-            p1, center-p1, color_func(s, atom_id1)
+            p1, center-p1, colors[atom_id1]
         )
         add_bdata!(
             bonds[bond_type],
-            center, p2-center, color_func(s, atom_id2)
+            center, p2-center, colors[atom_id2]
         )
     end
 
     return bonds
 end
 
-function bond_pbc(s::AbstractSystem{3, F, SysType}, color_func::Function) where {F<:AbstractFloat, SysType<:AbstractSystemType}
+function bond_pbc(
+    s::AbstractSystem{3, F, SysType},
+    colors::AbstractVector{T}
+) where {F<:AbstractFloat, SysType<:AbstractSystemType, T<:Colorant}
     if !wrapped(s)
         error("bond_pbc does not support non-wrapped system. Use bond_nonpbc instead.")
     end
@@ -181,7 +187,7 @@ function bond_pbc(s::AbstractSystem{3, F, SysType}, color_func::Function) where 
         @assert all(x -> -1 <= x.progress <= 1, cross_points)
 
         # 結合次数別にbonds::Vector{BondData}を構築し，bond dataを追加
-        color1, color2 = color_func(s, atom_id1), color_func(s, atom_id2)
+        color1, color2 = colors[atom_id1], colors[atom_id2]
         bond_type = _bond_type(s, atom_id1, atom_id2)
         pbc_shift = SVector{3, F}(0.0, 0.0, 0.0)
         for i in 1:length(cross_points)-1

@@ -3,6 +3,7 @@ module HMDVisualize
 using Colors
 # Choose colorschemes with care! Refer to Peter Kovesi's PerceptualColourMaps package, or to Fabio Crameri's Scientific Colour Maps for more information.
 using ColorSchemes: colorschemes, get
+using DataStructures
 using GeometryBasics
 using Graphs
 using HMD
@@ -16,22 +17,23 @@ using Printf
 using StaticArrays
 using Symbolics
 
-export visualize, color_scheme, viridis, default_color, atom_color
+export visualize, color_scheme, viridis, atom_color
+export AbstractAtomColoring, DefaultColoring, MoleculeViridis, count_ltypes
 
 ###
 ###### preset colors
 ###
 
 const atom_color = Dict(
-    elements[:H ].number => colorant"hsla(  0,   0%,  90%, 1.0)",
-    elements[:C ].number => colorant"hsla(249,  14%,  50%, 1.0)",
-    elements[:N ].number => colorant"hsla(240,  70%,  78%, 1.0)",
-    elements[:O ].number => colorant"hsla(351,  95%,  70%, 1.0)",
-    elements[:F ].number => colorant"hsla( 95,  40%,  50%, 1.0)",
-    elements[:Si].number => colorant"hsla( 20,  39%,  74%, 1.0)",
-    elements[:S ].number => colorant"hsla( 41,  95%,  59%, 1.0)",
-    elements[:Cl].number => colorant"hsla(158,  79%,  42%, 1.0)",
-    elements[:Br].number => colorant"hsla(  0,  60%,  36%, 1.0)"
+    elements[:H ].number => LCHuv{Float32}(91.1, 0.00 , 140 ),
+    elements[:C ].number => LCHuv{Float32}(47.9, 28.4 , 271 ),
+    elements[:N ].number => LCHuv{Float32}(68.4, 65.6 , 266 ),
+    elements[:O ].number => LCHuv{Float32}(63.6, 104  , 5.57),
+    elements[:F ].number => LCHuv{Float32}(66.9, 67.6 , 116 ),
+    elements[:Si].number => LCHuv{Float32}(75.9, 28.5 , 37.2),
+    elements[:S ].number => LCHuv{Float32}(79.6, 92.0 , 55.7),
+    elements[:Cl].number => LCHuv{Float32}(69.0, 68.7 , 148 ),
+    elements[:Br].number => LCHuv{Float32}(33.2, 82.6 , 12.2)
 )
 
 function default_color(s::AbstractSystem, atom_id::Integer)
@@ -39,10 +41,48 @@ function default_color(s::AbstractSystem, atom_id::Integer)
     return if elem >= 1
         atom_color[elem]
     else elem < 0
-        colorant"hsla(170,  0%, 37%, 1.0)"
+        LCHuv{Float32}(40, 0, 214)
     end
 end
 
+abstract type AbstractAtomColoring end
+
+struct DefaultColoring{T<:AbstractSystemType} <: AbstractAtomColoring
+    labelcount::Accumulator{String, Int64}
+    atom_color::Dict{Int, LCHuv{Float32}}
+end
+
+function DefaultColoring(
+    s::AbstractSystem{D, F, S}
+) where {D, F<:AbstractFloat, S<:AbstractSystemType}
+    count = counter(String)
+    for label in all_labels(s, "polymeric")
+        inc!(count, type(label))
+    end
+    return DefaultColoring{S}(count, atom_color)
+end
+
+function (dc::DefaultColoring{S})(
+    s::AbstractSystem{D, F, S}
+) where {D, F<:AbstractFloat, S<:AbstractSystemType}
+    return map(1:natom(s)) do atom_id
+        elem = element(s, atom_id)
+        if elem >= 1
+            dc.atom_color[elem]
+        else elem < 0
+            colorant"hsla(170,  0%, 37%, 1.0)"
+        end
+    end
+end
+
+function (dc::DefaultColoring{BeadsSpring})(
+    s::AbstractSystem{D, F, BeadsSpring}
+) where {D, F<:AbstractFloat}
+    nelem = maximum(all_elements(s))
+    return [viridis(element(s, atom_id) / nelem) for atom_id in 1:natom(s)]
+end
+
+include("coloring.jl")
 include("assets/bonds.jl")
 include("bond.jl")
 
@@ -54,19 +94,20 @@ function visualize(
     s::AbstractSystem{D, F, SysType},
     fig = Figure(; backgroundcolor = :black),
     time_obs = nothing;
-    color_func::Function = default_color,
-    atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15,
-    boxvisualize::Bool = true
+    atom_radius::Real = 0.30,
+    bond_radius::Real = 0.15,
+    boxvisualize::Bool = true,
+    coloring::Type{<:AbstractAtomColoring} = DefaultColoring
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
+    traj = Trajectory(s)
     return visualize(
-        Trajectory(s),
+        traj,
         fig,
         time_obs;
-        color_func = color_func,
         atom_radius = atom_radius,
         bond_radius = bond_radius,
-        boxvisualize = boxvisualize
+        boxvisualize = boxvisualize,
+        coloring = coloring,
     )
 end
 
@@ -79,10 +120,10 @@ function visualize(
     traj::AbstractTrajectory,
     fig = Figure(; backgroundcolor = :black),
     time_obs = nothing;
-    atom_radius::Number = 0.30,
-    bond_radius::Number = 0.15,
+    atom_radius::Real = 0.30,
+    bond_radius::Real = 0.15,
     boxvisualize::Bool = true,
-    color_func::Function = default_color
+    coloring::Type{<:AbstractAtomColoring} = DefaultColoring
 )
     return visualize(
         _is_BS(traj),
@@ -92,7 +133,7 @@ function visualize(
         atom_radius,
         bond_radius,
         boxvisualize,
-        color_func
+        coloring(traj[1])
     )
 end
 
@@ -102,19 +143,12 @@ function visualize(
     traj::Trajectory{D, F, BeadsSpring, L},
     fig,
     time_obs,
-    atom_radius::Number,
-    bond_radius::Number,
+    atom_radius::Real,
+    bond_radius::Real,
     boxvisualize::Bool,
-    color_func::Function
+    coloring::AbstractAtomColoring
 ) where {D, F<:AbstractFloat, L}
-    nelem = length(unique(all_elements(traj[1])))
-    cf = if color_func == default_color
-        (s, i) -> viridis(element(s, i) / nelem)
-    else
-        color_func
-    end
-
-    return _visualize(traj, fig, time_obs, atom_radius, bond_radius, boxvisualize, cf)
+    return _visualize(traj, fig, time_obs, atom_radius, bond_radius, boxvisualize, coloring)
 end
 
 function visualize(
@@ -122,10 +156,10 @@ function visualize(
     traj::Trajectory{D, F, SysType, L},
     fig,
     time_obs,
-    atom_radius::Number,
-    bond_radius::Number,
+    atom_radius::Real,
+    bond_radius::Real,
     boxvisualize::Bool,
-    color_func::Function
+    coloring::AbstractAtomColoring
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType, L}
     nelem = length(unique(all_elements(traj[1])))
     return _visualize(
@@ -135,7 +169,7 @@ function visualize(
         atom_radius,
         bond_radius,
         boxvisualize,
-        color_func
+        coloring
     )
 end
 
@@ -144,10 +178,10 @@ function _visualize(
     traj::AbstractTrajectory{D, F, SysType},
     fig,
     time_obs,
-    atom_radius::Number,
-    bond_radius::Number,
+    atom_radius::Real,
+    bond_radius::Real,
     boxvisualize::Bool,
-    color_func::Function
+    coloring::AbstractAtomColoring
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     if dimension(traj[1]) != 3
         error("expected dimension 3, found $D")
@@ -160,7 +194,7 @@ function _visualize(
         time_obs = Slider(fig[2, 1], range = 1:length(traj), startvalue = 1).value
     end
     axis = LScene(fig[1,1]; show_axis = false)
-    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0)
+    cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0, cad=true)
 
     reader = similar_system(traj)
 
@@ -180,7 +214,7 @@ function _visualize(
         Point3f.(all_positions(reader))
     end
     atom_colors = lift(box_mesh) do stub
-        colors = [color_func(reader, atom_id) for atom_id in 1:natom(reader)]
+        colors = coloring(reader)
     end
     inspect_labels = map(1:natom(reader)) do i
         p = position(reader, i)
@@ -206,11 +240,11 @@ function _visualize(
     )
 
     # bonds plot
-    bonds = lift(box_mesh) do stub
+    bonds = lift(atom_colors) do colors
         if wrapped(traj)
-            bond_pbc(reader, color_func)
+            bond_pbc(reader, colors)
         else
-            bond_nonpbc(reader, color_func)
+            bond_nonpbc(reader, colors)
         end
     end
     for bondtype in keys(bonds[])
@@ -261,7 +295,7 @@ function line_bewteen!(axis, p1, p2)
 end
 
 function color_scheme(value::Real; scheme=:viridis)
-    return HSLA{Float32}(get(colorschemes[scheme], value))
+    return LCHuv{Float32}(get(colorschemes[scheme], value))
 end
 
 viridis(value::Real) = color_scheme(value::Real; scheme=:viridis)
