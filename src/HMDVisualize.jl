@@ -25,15 +25,15 @@ export AbstractAtomColoring, DefaultColoring, MoleculeViridis, count_ltypes
 ###
 
 const atom_color = Dict(
-    elements[:H ].number => LCHuv{Float32}(91.1, 0.00 , 140 ),
-    elements[:C ].number => LCHuv{Float32}(47.9, 28.4 , 271 ),
-    elements[:N ].number => LCHuv{Float32}(68.4, 65.6 , 266 ),
-    elements[:O ].number => LCHuv{Float32}(63.6, 104  , 5.57),
-    elements[:F ].number => LCHuv{Float32}(66.9, 67.6 , 116 ),
-    elements[:Si].number => LCHuv{Float32}(75.9, 28.5 , 37.2),
-    elements[:S ].number => LCHuv{Float32}(79.6, 92.0 , 55.7),
-    elements[:Cl].number => LCHuv{Float32}(69.0, 68.7 , 148 ),
-    elements[:Br].number => LCHuv{Float32}(33.2, 82.6 , 12.2)
+    elements[:H ].number => LCHuvA{Float32}(91.1, 0.00 , 140 , 1.0),
+    elements[:C ].number => LCHuvA{Float32}(47.9, 28.4 , 271 , 1.0),
+    elements[:N ].number => LCHuvA{Float32}(68.4, 65.6 , 266 , 1.0),
+    elements[:O ].number => LCHuvA{Float32}(63.6, 104  , 5.57, 1.0),
+    elements[:F ].number => LCHuvA{Float32}(66.9, 67.6 , 116 , 1.0),
+    elements[:Si].number => LCHuvA{Float32}(75.9, 28.5 , 37.2, 1.0),
+    elements[:S ].number => LCHuvA{Float32}(79.6, 92.0 , 55.7, 1.0),
+    elements[:Cl].number => LCHuvA{Float32}(69.0, 68.7 , 148 , 1.0),
+    elements[:Br].number => LCHuvA{Float32}(33.2, 82.6 , 12.2, 1.0)
 )
 
 function default_color(s::AbstractSystem, atom_id::Integer)
@@ -41,7 +41,7 @@ function default_color(s::AbstractSystem, atom_id::Integer)
     return if elem >= 1
         atom_color[elem]
     else elem < 0
-        LCHuv{Float32}(40, 0, 214)
+        LCHuvA{Float32}(40, 0, 214, 1.0)
     end
 end
 
@@ -49,7 +49,7 @@ abstract type AbstractAtomColoring end
 
 struct DefaultColoring{T<:AbstractSystemType} <: AbstractAtomColoring
     labelcount::Accumulator{String, Int64}
-    atom_color::Dict{Int, LCHuv{Float32}}
+    atom_color::Dict{Int, LCHuvA{Float32}}
 end
 
 function DefaultColoring(
@@ -295,7 +295,7 @@ function line_bewteen!(axis, p1, p2)
 end
 
 function color_scheme(value::Real; scheme=:viridis)
-    return LCHuv{Float32}(get(colorschemes[scheme], value))
+    return LCHuvA{Float32}(get(colorschemes[scheme], value))
 end
 
 viridis(value::Real) = color_scheme(value::Real; scheme=:viridis)

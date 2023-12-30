@@ -1,12 +1,12 @@
 struct MoleculeViridis <: AbstractAtomColoring
-    colors::Vector{LCHuv{Float32}}
+    colors::Vector{LCHuvA{Float32}}
 end
 
 function MoleculeViridis(s::AbstractSystem{D, F, S}) where {D, F<:AbstractFloat, S<:AbstractSystemType}
     mols = all_labels(s, "polymeric", Polymer)
     contiguous = all(i -> id(mols[i]) + 1 == id(mols[i+1]), 1:length(mols)-1)
 
-    colors = Vector{LCHuv{Float32}}(undef, natom(s))
+    colors = Vector{LCHuvA{Float32}}(undef, natom(s))
     for (i, mol) in enumerate(mols)
         atom_ids = label2atom(s, "polymeric", mol)
         if contiguous

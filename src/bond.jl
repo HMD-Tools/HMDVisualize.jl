@@ -34,7 +34,7 @@ end
 Base.@kwdef mutable struct BondData
     origin::Vector{Point3f0} = Point3f[]
     direction::Vector{Point3f0} = Point3f[]
-    colors::Vector{LCHuv{Float32}} = LCHuv{Float32}[]
+    colors::Vector{LCHuvA{Float32}} = LCHuvA{Float32}[]
 end
 
 function add_bdata!(
