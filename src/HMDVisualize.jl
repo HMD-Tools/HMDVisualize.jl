@@ -31,6 +31,7 @@ const atom_color = Dict(
     elements[:O ].number => LCHuvA{Float32}(63.6, 104  , 5.57, 1.0),
     elements[:F ].number => LCHuvA{Float32}(66.9, 67.6 , 116 , 1.0),
     elements[:Si].number => LCHuvA{Float32}(75.9, 28.5 , 37.2, 1.0),
+    elements[:P].number  => LCHuvA{Float32}(75.9, 28.5 , 37.2, 1.0), # temporary!
     elements[:S ].number => LCHuvA{Float32}(79.6, 92.0 , 55.7, 1.0),
     elements[:Cl].number => LCHuvA{Float32}(69.0, 68.7 , 148 , 1.0),
     elements[:Br].number => LCHuvA{Float32}(33.2, 82.6 , 12.2, 1.0)
