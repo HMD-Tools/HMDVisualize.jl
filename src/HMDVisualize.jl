@@ -18,7 +18,8 @@ using StaticArrays
 using Symbolics
 
 export visualize, color_scheme, viridis, atom_color
-export AbstractAtomColoring, DefaultColoring, MoleculeViridis, count_ltypes
+export AbstractAtomColoring, StaticColoring, DefaultColoring, MoleculeViridis, count_ltypes
+export VisualizeMolecule, VisualizeRU, EmphAtoms
 
 ###
 ###### preset colors
@@ -37,50 +38,45 @@ const atom_color = Dict(
     elements[:Br].number => LCHuvA{Float32}(33.2, 82.6 , 12.2, 1.0)
 )
 
+const palette = Dict(
+    :emph => LCHuvA{Float32}(69.6, 114  , 25.57, 1.0),
+    :transparent => LCHuvA{Float32}(0, 0, 0, 0.0),
+    :nonatom => LCHuvA{Float32}(40, 0, 214, 1.0)
+)
+
 function default_color(s::AbstractSystem, atom_id::Integer)
     elem = element(s, atom_id)
     return if elem >= 1
         atom_color[elem]
     else elem < 0
-        LCHuvA{Float32}(40, 0, 214, 1.0)
+        palette[:nonatom]
     end
 end
 
 abstract type AbstractAtomColoring end
+abstract type StaticColoring <: AbstractAtomColoring end
 
-struct DefaultColoring{T<:AbstractSystemType} <: AbstractAtomColoring
-    labelcount::Accumulator{String, Int64}
-    atom_color::Dict{Int, LCHuvA{Float32}}
+function (coloring::StaticColoring)(s::AbstractSystem{D, F, S}) where {D, F<:AbstractFloat, S<:AbstractSystemType}
+    return atom_colors(coloring)
 end
+
+struct DefaultColoring{T<:AbstractSystemType} <: StaticColoring
+    atom_color::Vector{LCHuvA{Float32}}
+end
+atom_colors(dc::DefaultColoring) = dc.atom_color
 
 function DefaultColoring(
     s::AbstractSystem{D, F, S}
 ) where {D, F<:AbstractFloat, S<:AbstractSystemType}
-    count = counter(String)
-    for label in all_labels(s, "polymeric")
-        inc!(count, type(label))
-    end
-    return DefaultColoring{S}(count, atom_color)
+    return DefaultColoring{S}([default_color(s, i) for i in 1:natom(s)])
 end
 
-function (dc::DefaultColoring{S})(
-    s::AbstractSystem{D, F, S}
-) where {D, F<:AbstractFloat, S<:AbstractSystemType}
-    return map(1:natom(s)) do atom_id
-        elem = element(s, atom_id)
-        if elem >= 1
-            dc.atom_color[elem]
-        else elem < 0
-            colorant"hsla(170,  0%, 37%, 1.0)"
-        end
-    end
-end
-
-function (dc::DefaultColoring{BeadsSpring})(
+function DefaultColoring(
     s::AbstractSystem{D, F, BeadsSpring}
 ) where {D, F<:AbstractFloat}
     nelem = maximum(all_elements(s))
-    return [viridis(element(s, atom_id) / nelem) for atom_id in 1:natom(s)]
+    colors = [viridis(element(s, atom_id) / nelem) for atom_id in 1:natom(s)]
+    return DefaultColoring{BeadsSpring}(colors)
 end
 
 include("coloring.jl")
@@ -98,7 +94,7 @@ function visualize(
     atom_radius::Real = 0.30,
     bond_radius::Real = 0.15,
     boxvisualize::Bool = true,
-    coloring::Type{<:AbstractAtomColoring} = DefaultColoring
+    coloring::AbstractAtomColoring = DefaultColoring(s)
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType}
     traj = Trajectory(s)
     return visualize(
@@ -124,7 +120,7 @@ function visualize(
     atom_radius::Real = 0.30,
     bond_radius::Real = 0.15,
     boxvisualize::Bool = true,
-    coloring::Type{<:AbstractAtomColoring} = DefaultColoring
+    coloring::AbstractAtomColoring = DefaultColoring(traj[1])
 )
     return visualize(
         _is_BS(traj),
@@ -134,7 +130,7 @@ function visualize(
         atom_radius,
         bond_radius,
         boxvisualize,
-        coloring(traj[1])
+        coloring
     )
 end
 
@@ -155,14 +151,13 @@ end
 function visualize(
     ::NonBeadsSpring,
     traj::Trajectory{D, F, SysType, L},
-    fig,
+    fig::Makie.Figure,
     time_obs,
     atom_radius::Real,
     bond_radius::Real,
     boxvisualize::Bool,
     coloring::AbstractAtomColoring
 ) where {D, F<:AbstractFloat, SysType<:AbstractSystemType, L}
-    nelem = length(unique(all_elements(traj[1])))
     return _visualize(
         traj,
         fig,
@@ -177,7 +172,7 @@ end
 #TODO: 回転中心の指定，平行移動速度の自動調整，回転速度のスライドバー指定
 function _visualize(
     traj::AbstractTrajectory{D, F, SysType},
-    fig,
+    fig::Makie.Figure,
     time_obs,
     atom_radius::Real,
     bond_radius::Real,
