@@ -194,24 +194,7 @@ function _visualize(
 
     reader = similar_system(traj)
 
-    # box plot
-    #box_mesh = lift(sl_x.value) do index
-    box_mesh = lift(time_obs) do index
-        update_reader!(reader, traj, index)
-        get_boxmesh(reader)
-    end
-    mesh!(
-        axis, box_mesh;
-        color = boxvisualize ? :white : :transparent
-    )
-
-    # atom plot
-    atoms = lift(box_mesh) do stub
-        Point3f.(all_positions(reader))
-    end
-    atom_colors = lift(box_mesh) do stub
-        colors = coloring(reader)
-    end
+    # atom labels
     inspect_labels = map(1:natom(reader)) do i
         p = position(reader, i)
         elem = element(reader, i)
@@ -229,26 +212,66 @@ function _visualize(
         y: $(y)\n\
         z: $(z)"
     end
+
+    # observables that changes with time_obs
+    # trigger order: time_obs -> box_mesh -> others
+    box_mesh = lift(time_obs) do index
+        update_reader!(reader, traj, index)
+        get_boxmesh(reader)
+    end
+    atoms = Observable{Vector{Point3f}}(Point3f.(all_positions(reader)))
+    atom_colors = Observable{Vector{LCHuvA{Float32}}}(coloring(reader))
+    bdata = let
+        bonddata_by_type(reader, bond_radius) # bond type => bonddata
+    end
+
+    bondtypes = [_bond_type(reader, src(b), dst(b)) for b in bonds(reader)]
+    # observable update settings
+    on(box_mesh) do stub
+        atoms[] .= all_positions(reader)
+        atom_colors[] .= coloring(reader)
+        if is_reaction(traj, time_obs[])
+            # Currently update all bond information when reaction occurs.
+            # After HMD trajectory support differential format for topology change by reaction,
+            # handling of bond Observables will be smarter.
+            _update!(bondtypes, reader)
+        end
+        if wrapped(reader)
+            bond_pbc!(bdata, reader, atom_colors.val, bondtypes)
+        else
+            bond_nonpbc!(bdata, reader, atom_colors.val, bondtypes)
+        end
+        notify(atoms)
+        notify(atom_colors)
+        for btype in (Single, Double, Triple, Aromatic)
+            for f in fieldnames(BondData)
+                notify(getfield(bdata[btype], f))
+            end
+        end
+    end
+
+    mesh!(
+        axis, box_mesh;
+        color = boxvisualize ? :white : :transparent
+    )
     meshscatter!(axis, atoms;
         color = atom_colors,
         markersize = atom_radius,
         inspector_label = (self, i, p) -> inspect_labels[i]
     )
-
-    # bonds plot
-    bonds = lift(atom_colors) do colors
-        if wrapped(traj)
-            bond_pbc(reader, colors)
-        else
-            bond_nonpbc(reader, colors)
-        end
-    end
-    for bondtype in keys(bonds[])
-        bonds_typed = @lift $(bonds)[bondtype]
-        bondscatter!(axis, bonds_typed, bond_radius, _bond_marker(bondtype))
+    for btype in (Single, Double, Triple, Aromatic)
+        bondscatter!(axis, bdata[btype], _bond_marker(btype))
     end
 
     return fig
+end
+
+function _update!(bondtypes::Vector{BondTypeVis}, reader)
+    resize!(bondtypes, length(bonds(reader)))
+    for (i, b) in enumerate(bonds(reader))
+        bondtypes[i] = _bond_type(reader, src(b), dst(b))
+    end
+    return nothing
 end
 
 function get_boxmesh(s)

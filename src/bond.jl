@@ -30,124 +30,121 @@ function _bond_type(s::AbstractSystem, atom_id1::Integer, atom_id2::Integer)
 end
 
 # data structure for bond position, direction, color, and type
-
-Base.@kwdef mutable struct BondData
-    origin::Vector{Point3f0} = Point3f[]
-    direction::Vector{Point3f0} = Point3f[]
-    colors::Vector{LCHuvA{Float32}} = LCHuvA{Float32}[]
+Base.@kwdef struct BondData
+    origin::Observable{Vector{Point3f0}} = Observable(Point3f[])
+    direction::Observable{Vector{Makie.Vec3f}} = Observable(Makie.Vec3f[])
+    scale::Observable{Vector{Makie.Vec3f}} = Observable(Makie.Vec3f[]) # (radius, radisu, length)
+    colors::Observable{Vector{LCHuvA{Float32}}} = Observable(LCHuvA{Float32}[])
 end
 
-function add_bdata!(
-    b::BondData,
-    origin::AbstractVector{F1},
-    direction::AbstractVector{F2},
-    color::Colorant
-) where {F1<:AbstractFloat, F2<:AbstractFloat}
-    push!(b.origin, origin)
-    push!(b.direction, direction)
-    push!(b.colors, color)
-    return nothing
+function BondData(n::Integer, bond_radius::Real)
+    @assert n ≥ 0
+    return BondData(
+        Observable([Point3f(0.0f0, 0.0f0, 0.0f0) for _ in 1:n]),
+        Observable([Makie.Vec3f(0.0f0, 0.0f0, 0.0f0) for _ in 1:n]),
+        Observable([Makie.Vec3f(bond_radius, bond_radius, 0.0f0) for _ in 1:n]),
+        Observable([palette[:emph] for _ in 1:n])
+    )
 end
 
-function bondscatter!(axis::LScene, bonds::BondData, bond_radius::Number, marker::AbstractMesh)
-    # scaling with absolute size
-    scales = Vec3f[]
-    for v in bonds.direction
-        l = norm(v)
-        push!(scales, Makie.Vec3f(bond_radius, bond_radius, l))
+function bonddata_by_type(s::AbstractSystem, bond_radius::Real)
+    num_bond = Dict{BondTypeVis, Int64}(btype => 0 for btype in (Single, Double, Triple, Aromatic))
+    for b in bonds(s)
+        btype = _bond_type(s, src(b), dst(b))
+        num_bond[btype] += 1
     end
 
-    # rotation for bond
-    rots = normalize(bonds.direction)
+    # bond multipliction for coloring and PBC
+    n = wrapped(s) ? 5 : 2
+    return Dict{BondTypeVis, BondData}(
+        Single   => BondData(n * num_bond[Single]  , bond_radius),
+        Double   => BondData(n * num_bond[Double]  , bond_radius),
+        Triple   => BondData(n * num_bond[Triple]  , bond_radius),
+        Aromatic => BondData(n * num_bond[Aromatic], bond_radius)
+    )
+end
 
+function bondscatter!(axis::LScene, bonds::BondData, marker::AbstractMesh)
     meshscatter!(
         axis, bonds.origin;
         color = bonds.colors, marker = marker,
-        rotation = rots, markersize = scales,
+        rotation = bonds.direction, markersize = bonds.scale,
         inspectable = false
     )
 end
 
-function bondscatter!(axis::LScene, bonds::Observable{BondData}, bond_radius::Number, marker::AbstractMesh)
-    # scaling with absolute size
-    scales = lift(bonds) do stub
-        map(bonds[].direction) do v
-            l = norm(v)
-            Makie.Vec3f(bond_radius, bond_radius, l)
-        end
-    end
-
-    # bond direction
-    rots = lift(bonds) do stub
-        normalize(bonds[].direction)
-    end
-
-    points = lift(bonds) do stub
-        bonds[].origin
-    end
-
-    colors = lift(bonds) do stub
-        bonds[].colors
-    end
-
-    meshscatter!(
-        axis, points;
-        color = colors, marker = marker,
-        rotation = rots, markersize = scales,
-        inspectable = false
-    )
-end
-
-function bond_nonpbc(
+function bond_nonpbc!(
+    bdata::Dict{BondTypeVis, BondData},
     s::AbstractSystem{D, F, S},
-    colors::AbstractVector{T}
+    colors::AbstractVector{T},
+    bondtypelist::Vector{BondTypeVis}
 ) where {D, F<:AbstractFloat, S<:AbstractSystemType, T<:Colorant}
     if wrapped(s)
         error("bond_nonpbc does not support wrapped system. Use bond_pbc instead.")
     end
+    bond_radius = bdata[Single].scale[][1][1]
+    bond_types = keys(bdata)
 
-    bonds = Dict{BondTypeVis, BondData}()
-    bonds[Single] = BondData()
-    bonds[Double] = BondData()
-    bonds[Triple] = BondData()
-    bonds[Aromatic] = BondData()
-    for edge in edges(topology(s))
-        atom_id1, atom_id2 = src(edge), dst(edge)
-        p1, p2 = position(s, atom_id1), position(s, atom_id2)
-        center = p1 + 0.5*(p2 - p1)
-        bond_type = _bond_type(s, atom_id1, atom_id2)
-        add_bdata!(
-            bonds[bond_type],
-            p1, center-p1, colors[atom_id1]
-        )
-        add_bdata!(
-            bonds[bond_type],
-            center, p2-center, colors[atom_id2]
-        )
+    for btype in bond_types
+        n = 2 * count(==(btype), bondtypelist)
+        resize!(bdata[btype].origin.val   , n)
+        resize!(bdata[btype].direction.val, n)
+        resize!(bdata[btype].scale.val    , n)
+        resize!(bdata[btype].colors.val   , n)
     end
 
-    return bonds
+    ibond = Dict{BondTypeVis, Int}(btype => 0 for btype in bond_types)
+    for (i, edge) in enumerate(bonds(s))
+        atom_id1, atom_id2 = src(edge), dst(edge)
+        btype = bondtypelist[i]
+        ibond[btype] += 1
+
+        p1, p2 = position(s, atom_id1), position(s, atom_id2)
+        center = p1 + 0.5*(p2 - p1)
+        bond_length = 0.5*norm(p2 - p1)
+        blinv = 1 / bond_length
+
+        bd = bdata[btype]
+        n = 2*ibond[btype] - 1
+        bd.origin.val[n] = p1
+        bd.direction.val[n] = (center - p1) * blinv
+        bd.scale.val[n] = Makie.Vec3f(bond_radius, bond_radius, bond_length)
+        bd.colors.val[n] = colors[atom_id1]
+
+        bd.origin.val[n+1] = p2
+        bd.direction.val[n+1] = (p2 - center) * blinv
+        bd.scale.val[n+1] = Makie.Vec3f(bond_radius, bond_radius, bond_length)
+        bd.colors.val[n+1] = colors[atom_id2]
+    end
+
+    return bdata
 end
 
-function bond_pbc(
+function bond_pbc!(
+    bdata::Dict{BondTypeVis, BondData},
     s::AbstractSystem{3, F, SysType},
-    colors::AbstractVector{T}
+    colors::AbstractVector{T},
+    bondtypelist::Vector{BondTypeVis}
 ) where {F<:AbstractFloat, SysType<:AbstractSystemType, T<:Colorant}
     if !wrapped(s)
         error("bond_pbc does not support non-wrapped system. Use bond_nonpbc instead.")
     end
+    bond_radius = bdata[Single].scale[][1][1]
+    bond_types = keys(bdata)
 
-    # bond data structure
-    bonds = Dict{BondTypeVis, BondData}()
-    bonds[Single] = BondData()
-    bonds[Double] = BondData()
-    bonds[Triple] = BondData()
-    bonds[Aromatic] = BondData()
+    for btype in bond_types
+        n = 5 * count(==(btype), bondtypelist)
+        resize!(bdata[btype].origin.val   , n)
+        resize!(bdata[btype].direction.val, n)
+        resize!(bdata[btype].scale.val    , n)
+        resize!(bdata[btype].colors.val   , n)
+    end
 
     origin = box(s).origin # box origin
     axis = box(s).axis
     a, b, c = axis[:, 1], axis[:, 2], axis[:, 3] # box vector
-    for edge in edges(topology(s))
+    ibond = Dict{BondTypeVis, Int}(btype => 0 for btype in bond_types)
+    for (i, edge) in enumerate(bonds(s))
         atom_id1, atom_id2 = src(edge), dst(edge)
         p1, p2 = position(s, atom_id1), position(s, atom_id2)
         diff = travel(s, atom_id2) - travel(s, atom_id1)
@@ -186,22 +183,40 @@ function bond_pbc(
         sort!(cross_points; by=x->x.progress)
         @assert all(x -> -1 <= x.progress <= 1, cross_points)
 
-        # 結合次数別にbonds::Vector{BondData}を構築し，bond dataを追加
+
+        # now bond_vector is separated by cross_points [0, ..., 0.5, ..., 1.0]
         color1, color2 = colors[atom_id1], colors[atom_id2]
-        bond_type = _bond_type(s, atom_id1, atom_id2)
+        btype = bondtypelist[i]
+        bd = bdata[btype]
+        ibond[btype] += 1
         pbc_shift = SVector{3, F}(0.0, 0.0, 0.0)
-        for i in 1:length(cross_points)-1
-            t, t_next = cross_points[i].progress, cross_points[i+1].progress
-            cl = t < 0.5 ? color1 : color2
+        jmax = 1
+        for j in 1:length(cross_points)-1
+            # bond part begins at t, ends at t_next
+            t, t_next = cross_points[j].progress, cross_points[j+1].progress
+            # starting point of bond part separated by cross_points
             p  = p1 + t_next*bond_vector + pbc_shift
-            add_bdata!(
-                bonds[bond_type],
-                p, (t-t_next)*bond_vector, cl
-            )
-            dim = cross_points[i+1].cross_dim
+            bond_vec = (t-t_next)*bond_vector
+            bond_len = norm(bond_vec)
+            inv = 1 / bond_len
+
+            # add bond part to BondData
+            @assert j ≤ 5
+            _i = 5*(ibond[btype]-1) + j
+            bd.origin.val[_i] = p
+            bd.direction.val[_i] = inv * bond_vec
+            bd.scale.val[_i] = Makie.Vec3f(bond_radius, bond_radius, bond_len)
+            bd.colors.val[_i] = t < 0.5 ? color1 : color2
+
+            dim = cross_points[j+1].cross_dim
             if dim != 0
                 pbc_shift -= diff[dim] * axis[:, dim]
             end
+            jmax = j
+        end
+        for untouched in jmax+1:5
+            _i = 5*(ibond[btype]-1) + untouched
+            bd.colors.val[_i] = palette[:transparent]
         end
     end
 
