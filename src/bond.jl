@@ -112,7 +112,7 @@ function bond_nonpbc!(
         bd.colors.val[n] = colors[atom_id1]
 
         bd.origin.val[n+1] = p2
-        bd.direction.val[n+1] = (p2 - center) * blinv
+        bd.direction.val[n+1] = (center - p2) * blinv
         bd.scale.val[n+1] = Makie.Vec3f(bond_radius, bond_radius, bond_length)
         bd.colors.val[n+1] = colors[atom_id2]
     end
@@ -203,7 +203,7 @@ function bond_pbc!(
             # add bond part to BondData
             @assert j ≤ 5
             _i = 5*(ibond[btype]-1) + j
-            bd.origin.val[_i] = p
+            bd.origin.val[_i] = p + bond_len * bond_vec
             bd.direction.val[_i] = inv * bond_vec
             bd.scale.val[_i] = Makie.Vec3f(bond_radius, bond_radius, bond_len)
             bd.colors.val[_i] = t < 0.5 ? color1 : color2

@@ -263,6 +263,10 @@ function _visualize(
         bondscatter!(axis, bdata[btype], _bond_marker(btype))
     end
 
+    n = time_obs[]
+    time_obs[] = 1
+    time_obs[] = n
+
     return fig
 end
 
