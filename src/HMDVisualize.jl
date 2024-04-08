@@ -192,10 +192,10 @@ function _visualize(
     axis = LScene(fig[1,1]; show_axis = false)
     cam3d!(axis; projectiontype = :orthographic, mouse_translationspeed=0.001f0, cad=false)
 
-    reader = similar_system(traj)
+    reader = similar_system(traj; reserve_dynamic=true, reserve_static=true)
 
     # atom labels
-    inspect_labels = map(1:natom(reader)) do i
+    inspect_labels = map(eachatom(reader)) do i
         p = position(reader, i)
         elem = element(reader, i)
         elem = if elem in 1:length(elements)
