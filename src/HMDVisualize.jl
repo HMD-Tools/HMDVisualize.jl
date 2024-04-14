@@ -270,7 +270,7 @@ function _visualize(
     return fig
 end
 
-function _update!(bondtypes::Vector{BondTypeVis}, reader)
+function _update!(bondtypes, reader)
     resize!(bondtypes, length(bonds(reader)))
     for (i, b) in enumerate(bonds(reader))
         bondtypes[i] = _bond_type(reader, src(b), dst(b))

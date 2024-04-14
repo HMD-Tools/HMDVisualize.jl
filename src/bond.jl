@@ -1,17 +1,17 @@
 # bond type for visualization
-@data BondTypeVis begin
-    Single
-    Double
-    Triple
-    Aromatic
-end
+@enum BondTypeVis Single Double Triple Aromatic
 
 function _bond_marker(btype::BondTypeVis)
-    @match btype begin
-        Single => Single_Bond
-        Double => Double_Bond
-        Triple => Triple_Bond
-        Aromatic => Aromatic_Bond
+    if btype == Single
+            Single_Bond
+    elseif btype == Double
+        Double_Bond
+    elseif btype == Triple
+        Triple_Bond
+    elseif btype == Aromatic
+        Aromatic_Bond
+    else
+        error("unsupported bond type: $btype")
     end
     #return Single_Bond
 end
